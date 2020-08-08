@@ -1,17 +1,18 @@
 #include <stdio.h>
+#include <stdlib.h>
 
-static char input[2048];
+#include <editline/readline.h>
+
 
 int main(int argc, char** argv) {
-    puts("Tlisp Version 0.0.0.0.1");
+    puts("Tlisp Version 0.0.0.0.2");
     puts("Press Ctrl+c to Exit\n");
 
     while (1) {
-        fputs("tlisp> ", stdout);
-
-        fgets(input, 2048, stdin);
-
-        printf("No you're a %s", input);
+        char* repl_input = readline("tlisp> ");
+        add_history(repl_input);
+        printf("No you're a %s\n", repl_input);
+        free(repl_input);
     }
 
     return 0;
