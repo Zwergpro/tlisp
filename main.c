@@ -5,6 +5,48 @@
 
 #include "mpc.h"
 
+enum { LVAL_NUM, LVAL_ERR};
+enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM};
+
+
+typedef struct {
+    int type;
+    long num;
+    int err;
+} lval;
+
+lval lval_num(long x) {
+    lval v;
+    v.type = LVAL_NUM;
+    v.num = x;
+    return v;
+}
+
+lval lval_err(int x) {
+    lval v;
+    v.type = LVAL_ERR;
+    v.err = x;
+    return v;
+}
+
+
+void lval_print(lval v) {
+    switch (v.type) {
+        case LVAL_NUM: printf("%li\n", v.num); break;
+        case LVAL_ERR:
+            if (v.err == LERR_DIV_ZERO) {
+                printf("Error: Division By Zero!\n");
+            }
+            if (v.err == LERR_BAD_OP)   {
+                printf("Error: Invalid Operator!\n");
+            }
+            if (v.err == LERR_BAD_NUM)  {
+                printf("Error: Invalid Number!\n");
+            }
+            break;
+    }
+}
+
 
 int number_of_leaves(mpc_ast_t* tree){
     if (tree->children_num == 0) { return 1; }
@@ -18,61 +60,59 @@ int number_of_leaves(mpc_ast_t* tree){
 }
 
 
-long eval_op(long x, char* op, long y) {
-    if (strcmp(op, "+") == 0) { return x + y; }
-    if (strcmp(op, "-") == 0) {
-        printf("%li - %li\n", x, y);
-        if (y == 0) { return -x; }
-        return x - y;
-    }
-    if (strcmp(op, "*") == 0) { return x * y; }
-    if (strcmp(op, "/") == 0) { return x / y; }
-    if (strcmp(op, "%") == 0) { return x % y; }
-    if (strcmp(op, "^") == 0) {
-        if (y == 0) { return 1; }
-        if (y == 1) { return x; }
+lval eval_op(lval x, char* op, lval y) {
 
-        long result = x;
-        for (int i=2; i <= y; i++){
-            result *= x;
+    if (x.type == LVAL_ERR) { return x; }
+    if (y.type == LVAL_ERR) { return y; }
+
+    if (strcmp(op, "+") == 0) { return lval_num(x.num + y.num); }
+    if (strcmp(op, "-") == 0) {
+        return y.num == 0 ? lval_num(-x.num) : lval_num(x.num - y.num);
+    }
+    if (strcmp(op, "*") == 0) { return lval_num(x.num * y.num); }
+
+    if (strcmp(op, "/") == 0) {
+        return y.num == 0 ? lval_err(LERR_DIV_ZERO) : lval_num(x.num / y.num);
+    }
+
+    if (strcmp(op, "%") == 0) {
+        return y.num == 0 ? lval_err(LERR_DIV_ZERO) : lval_num(x.num % y.num);
+    }
+
+    if (strcmp(op, "^") == 0) {
+        if (y.num == 0) { return lval_num(1); }
+        if (y.num == 1) { return x; }
+        if (y.num < 0) {return lval_err(LERR_BAD_NUM);}
+
+        long result = x.num;
+        for (int i=2; i <= y.num; i++){
+            result *= x.num;
         }
 
-        return result;
+        return lval_num(result);
     }
 
-    if (strcmp(op, "min") == 0) {
-        if (x <= y) { return x; }
-        return y;
-    }
+    if (strcmp(op, "min") == 0) { return x.num <= y.num ? x : y; }
+    if (strcmp(op, "max") == 0) { return x.num >= y.num ? x : y; }
 
-    if (strcmp(op, "max") == 0) {
-        if (x >= y) { return x; }
-        return y;
-    }
-
-    return 0;
+    return lval_err(LERR_BAD_OP);
 }
 
 
-long eval(mpc_ast_t* t) {
-
-    /* If tagged as number return it directly. */
+lval eval(mpc_ast_t* t) {
     if (strstr(t->tag, "number")) {
-        return atoi(t->contents);
+        errno = 0;
+        long x = strtol(t->contents, NULL, 10);
+        return errno != ERANGE ? lval_num(x) : lval_err(LERR_BAD_NUM);
     }
 
-    /* The operator is always second child. */
     char* op = t->children[1]->contents;
+    lval x = eval(t->children[2]);
 
-    /* We store the third child in `x` */
-    long x = eval(t->children[2]);
+    if (strcmp(op, "-") == 0 && t->children_num <= 4) { return lval_num(-x.num); }
 
-    if (strcmp(op, "-") == 0 && t->children_num <= 4) { return -x; }
-
-    /* Iterate the remaining children and combining. */
     int i = 3;
     while (strstr(t->children[i]->tag, "expr")) {
-        printf("%s\n", t->children[i]->tag);
         x = eval_op(x, op, eval(t->children[i]));
         i++;
     }
@@ -109,9 +149,9 @@ int main(int argc, char** argv) {
         mpc_result_t mpcResult;
         if (mpc_parse("<stdin>", repl_input, Lispy, &mpcResult)) {
             /* On Success Print the AST */
-            mpc_ast_print(mpcResult.output);
-            printf("%li\n", eval(mpcResult.output));
-            printf("%i\n", number_of_leaves(mpcResult.output));
+//            mpc_ast_print(mpcResult.output);
+            lval_print(eval(mpcResult.output));
+//            printf("%i\n", number_of_leaves(mpcResult.output));
             mpc_ast_delete(mpcResult.output);
         } else {
             /* Otherwise Print the Error */
