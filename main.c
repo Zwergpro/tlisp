@@ -215,6 +215,13 @@ lval* builtin_op(lval* a, char* op) {
             }
             x->num /= y->num;
         }
+        if (strcmp(op, "%") == 0) {
+            if (y->num == 0) {
+                lval_del(x); lval_del(y);
+                x = lval_err("Division By Zero!"); break;
+            }
+            x->num %= y->num;
+        }
 
         lval_del(y);
     }
@@ -273,7 +280,7 @@ int main(int argc, char** argv) {
 
     mpca_lang(MPCA_LANG_DEFAULT,
         "number : /-?[0-9]+/ ;"
-        "symbol : '+' | '-' | '*' | '/' ;"
+        "symbol : '+' | '-' | '*' | '/' | '%' ;"
         "sexpr  : '(' <expr>* ')' ;"
         "expr   : <number> | <symbol> | <sexpr> ;"
         "lispy  : /^/ <expr>* /$/ ;",
@@ -281,7 +288,7 @@ int main(int argc, char** argv) {
     );
 
 
-    puts("Tlisp Version 0.0.0.0.3");
+    puts("Tlisp Version 0.0.0.0.4");
     puts("Press Ctrl+c to Exit\n");
 
     while (1) {
